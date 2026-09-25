@@ -1,0 +1,176 @@
+SET URLLogin TO $'''https://sigaacademico.unisabana.edu.co/psp/CS90PRO/?&cmd=login&languageCd=ESP'''
+SET URLHerramientas TO $'''https://sigaacademico.unisabana.edu.co/psp/CS90PRO/EMPLOYEE/HRMS/s/WEBLIB_PTPP_SC.HOMEPAGE.FieldFormula.IScript_AppHP?pt_fname=PT_REPORTING_TOOLS&FolderPath=PORTAL_ROOT_OBJECT.PT_REPORTING_TOOLS&IsFolder=true'''
+SET URLConsola TO $'''https://sigaacademico.unisabana.edu.co/psp/CS90PRO/EMPLOYEE/HRMS/c/REPORT_CONSOLE.PT_CONSOLE.GBL'''
+SET NombreConsulta TO $'''US_CARGOS_PAGOS_REVFISCAL_QRY'''
+SET RunControl TO $'''CONSULTA'''
+SET Pausa TO 5
+SET EsperaMonitor TO 15
+SET MaxIntentos TO 80
+
+Display.InputDialog Title: $'''SIGA - Usuario''' Message: $'''Usuario de PeopleSoft:''' DefaultValue: $'''''' InputType: Display.InputType.SingleLine IsTopMost: True UserInput=> Usuario ButtonPressed=> Boton
+Display.InputDialog Title: $'''SIGA - Contraseña''' Message: $'''Contraseña (no se guarda):''' DefaultValue: $'''''' InputType: Display.InputType.Password IsTopMost: True UserInput=> Clave ButtonPressed=> Boton
+Display.InputDialog Title: $'''Ciclos lectivos''' Message: $'''Escriba los ciclos separados por coma (ej. 3860,3890):''' DefaultValue: $'''''' InputType: Display.InputType.SingleLine IsTopMost: True UserInput=> CiclosTexto ButtonPressed=> Boton
+Text.SplitText.SplitWithDelimiter Text: CiclosTexto CustomDelimiter: $'''[,;\s]+''' IsRegEx: True Result=> Ciclos
+Variables.CreateNewList List=> Fallidos
+Variables.CreateNewList List=> Descargados
+
+System.GetEnvironmentVariable.GetEnvironmentVariable Name: $'''USERPROFILE''' Value=> Perfil
+SET Descargas TO $'''%Perfil%\Downloads'''
+Folder.Create FolderPath: Descargas FolderName: $'''CargosPagos_EICEA''' Folder=> Salida
+
+WebAutomation.LaunchEdge.LaunchEdge Url: URLLogin WindowState: WebAutomation.BrowserWindowState.Maximized ClearCache: False ClearCookies: False WaitForPageToLoadTimeout: 60 Timeout: 60 BrowserInstance=> Browser
+WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { var u = document.getElementById("userid"), p = document.getElementById("pwd"); if (!u || !p) return "SIN_FORMULARIO"; u.value = "%Usuario%"; p.value = "%Clave%"; var b = document.querySelector("input[name=Submit],button[name=Submit],input[type=submit]"); if (b) { b.click(); } else { u.form.submit(); } return "OK"; }''' Result=> Res
+WAIT 8
+WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { return document.getElementById("pwd") ? "FALLO" : "OK"; }''' Result=> Res
+IF Res = $'''FALLO''' THEN
+    Display.ShowMessageDialog.ShowMessage Title: $'''SIGA''' Message: $'''No fue posible iniciar sesión. Revise usuario y contraseña.''' Icon: Display.Icon.ErrorIcon Buttons: Display.Buttons.OK DefaultButton: Display.DefaultButton.Button1 IsTopMost: True ButtonPressed=> Boton
+    WebAutomation.CloseWebBrowser BrowserInstance: Browser
+    EXIT Code: 1
+END
+
+SET InstanciaAnterior TO $''''''
+LOOP FOREACH CicloBruto IN Ciclos
+    Text.Trim Text: CicloBruto TrimOption: Text.TrimOption.Both TrimmedText=> Ciclo
+    IF IsEmpty(Ciclo) THEN
+        NEXT LOOP
+    END
+    SET Instancia TO $''''''
+    WebAutomation.GoToWebPage.GoToWebPage BrowserInstance: Browser Url: URLHerramientas WaitForPageToLoadTimeout: 60
+    WAIT Pausa
+    WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} return L("Visor de Consultas") ? "OK" : "SIN_VISOR"; }''' Result=> Res
+    IF Res <> $'''OK''' THEN
+        Variables.AddItemToList Item: $'''%Ciclo% (no se encontró Visor de Consultas)''' List: Fallidos
+        NEXT LOOP
+    END
+    WAIT Pausa
+    WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} var a=D(window,[]); for(var i=0;i<a.length;i++){var c=a[i].querySelectorAll("input[type=text]"); for(var j=0;j<c.length;j++){if(/SEARCH/i.test(c[j].id)){c[j].value="%NombreConsulta%"; c[j].dispatchEvent(new Event("change",{bubbles:true})); return B("Buscar") ? "OK" : "SIN_BUSCAR";}}} for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf("comienza por")<0) continue; var c=a[i].querySelectorAll("input[type=text]"); if(c.length){var e=c[c.length-1]; e.value="%NombreConsulta%"; e.dispatchEvent(new Event("change",{bubbles:true})); return B("Buscar") ? "OK" : "SIN_BUSCAR";}} return "SIN_CAMPO"; }''' Result=> Res
+    IF Res <> $'''OK''' THEN
+        Variables.AddItemToList Item: $'''%Ciclo% (no se pudo buscar la consulta: %Res%)''' List: Fallidos
+        NEXT LOOP
+    END
+    WAIT Pausa
+    WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} var p=G("QRY_VIEWERS_WRK_QRYSCHEDULE$0"); if(p){p.click(); return "OK";} var a=D(window,[]); for(var k=0;k<a.length;k++){var l=a[k].querySelectorAll("a[id*=QRYSCHEDULE]"); if(l.length){l[0].click(); return "OK";}} return "SIN_PROGRAMAR"; }''' Result=> Res
+    IF Res <> $'''OK''' THEN
+        Variables.AddItemToList Item: $'''%Ciclo% (no apareció el enlace Programar)''' List: Fallidos
+        NEXT LOOP
+    END
+    WAIT Pausa
+    WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} if(T("Nombre Prompt")) return "YA_EN_PROGRAMA"; F("Nombre Consulta","%NombreConsulta%"); F("ID Control Ejec","%RunControl%"); B("Buscar"); return "OK"; }''' Result=> Res
+    IF Res = $'''OK''' THEN
+        WAIT Pausa
+        WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} if(T("Nombre Prompt")) return "YA_EN_PROGRAMA"; return L("%NombreConsulta%") ? "OK" : "SIN_FILA"; }''' Result=> Res
+        WAIT Pausa
+    END
+    WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} var a=D(window,[]); for(var i=0;i<a.length;i++){var r=a[i].getElementsByTagName("tr"); for(var j=r.length-1;j>=0;j--){if((r[j].innerText||"").indexOf("STRM")>=0){var c=r[j].querySelector("input[type=text],textarea"); if(c){c.value="%Ciclo%"; c.dispatchEvent(new Event("change",{bubbles:true})); return "OK";}}}} return "SIN_STRM"; }''' Result=> Res
+    IF Res <> $'''OK''' THEN
+        Variables.AddItemToList Item: $'''%Ciclo% (no se encontró el campo STRM en Program Consultas)''' List: Fallidos
+        NEXT LOOP
+    END
+    WAIT 2
+    WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} return B("Aceptar") ? "OK" : "SIN_ACEPTAR"; }''' Result=> Res
+    WAIT Pausa
+    SET Res TO $'''SIN_PETICION'''
+    LOOP Intento FROM 1 TO 12 STEP 1
+        WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} if(!T("Petición Gestor Procesos")) return "ESPERA"; return B("Aceptar") ? "OK" : "SIN_ACEPTAR"; }''' Result=> Res
+        IF Res = $'''OK''' THEN
+            EXIT LOOP
+        END
+        WAIT Pausa
+    END
+    IF Res <> $'''OK''' THEN
+        Variables.AddItemToList Item: $'''%Ciclo% (no apareció la Petición Gestor Procesos)''' List: Fallidos
+        NEXT LOOP
+    END
+    WAIT Pausa
+    LOOP Intento FROM 1 TO 3 STEP 1
+        WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} var a=D(window,[]); for(var i=0;i<a.length;i++){var t=(a[i].body&&a[i].body.innerText)||""; var m=t.match(/Instancia Proceso:[^0-9]*([0-9]+)/); if(m) return m[1];} return ""; }''' Result=> Instancia
+        IF Instancia <> $'''''' THEN
+            EXIT LOOP
+        END
+        WAIT Pausa
+    END
+    WebAutomation.GoToWebPage.GoToWebPage BrowserInstance: Browser Url: URLConsola WaitForPageToLoadTimeout: 60
+    WAIT Pausa
+    LOOP Intento FROM 1 TO 6 STEP 1
+        WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} var b=G("PRCSRQSTDLG_WRK_LOADPRCSMONITORPB"); if(b){b.click(); return "OK";} var a=D(window,[]); for(var i=0;i<a.length;i++){var w=a[i].defaultView; if(a[i].win0 && w && w.submitAction_win0 && ((a[i].body&&a[i].body.innerText)||"").indexOf("Monitor Procesos")>=0){w.submitAction_win0(a[i].win0,"PRCSRQSTDLG_WRK_LOADPRCSMONITORPB"); return "OK";}} return L("Monitor Procesos") ? "OK" : "SIN_MONITOR"; }''' Result=> Res
+        IF Res = $'''OK''' THEN
+            EXIT LOOP
+        END
+        WAIT Pausa
+    END
+    IF Res <> $'''OK''' THEN
+        Variables.AddItemToList Item: $'''%Ciclo% (no se encontró el enlace Monitor Procesos)''' List: Fallidos
+        NEXT LOOP
+    END
+    WAIT Pausa
+    IF IsEmpty(Instancia) THEN
+        LOOP Intento FROM 1 TO 12 STEP 1
+            WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} var a=D(window,[]),mx=0,prev=parseInt("0%InstanciaAnterior%",10); for(var i=0;i<a.length;i++){var r=a[i].getElementsByTagName("tr"); for(var j=0;j<r.length;j++){var x=r[j].innerText||""; if(x.length<400 && /PSQUERY/i.test(x)){var m=x.match(/[0-9]{7,}/); if(m){var n=parseInt(m[0],10); if(n>mx) mx=n;}}}} if(mx>prev) return String(mx); B("Actualizar"); return ""; }''' Result=> Instancia
+            IF Instancia <> $'''''' THEN
+                EXIT LOOP
+            END
+            WAIT EsperaMonitor
+        END
+    END
+    IF IsEmpty(Instancia) THEN
+        Variables.AddItemToList Item: $'''%Ciclo% (no se obtuvo número de instancia)''' List: Fallidos
+        NEXT LOOP
+    END
+    SET Estado TO $'''ESPERA'''
+    SET Refresco TO $'''SIN_INTENTO'''
+    LOOP Intento FROM 1 TO MaxIntentos STEP 1
+        WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} var a=D(window,[]),t=""; for(var i=0;i<a.length;i++){var r=a[i].getElementsByTagName("tr"); for(var j=0;j<r.length;j++){var x=r[j].innerText||""; if(x.indexOf("%Instancia%")>=0 && x.length<400){t=x;}}} t=t.replace(/[ \t\r\n]+/g," "); if(!t) return "ESPERA:SIN_FILA"; if(/Error|No Ejecut|Cancel|No Enviado|No Publicado/i.test(t)) return "ERROR:"+t; if(/Correcto/i.test(t) && /Enviado|Publicado/i.test(t)) return "OK"; return "ESPERA:"+t; }''' Result=> Estado
+        IF StartsWith(Estado, $'''OK''', False) OR StartsWith(Estado, $'''ERROR''', False) THEN
+            EXIT LOOP
+        END
+        WAIT EsperaMonitor
+        WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} return B("Actualizar") ? "OK" : "SIN_ACTUALIZAR"; }''' Result=> Refresco
+        WAIT Pausa
+    END
+    SET InstanciaAnterior TO Instancia
+    IF Estado <> $'''OK''' THEN
+        Variables.AddItemToList Item: $'''%Ciclo% (instancia %Instancia%: %Estado% / Actualizar: %Refresco%)''' List: Fallidos
+        NEXT LOOP
+    END
+    WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} var b=G("PMN_FILTER_WRK_LOADRPTLIST"); if(b){b.click(); return "OK";} return L("Gestor Informes") ? "OK" : "SIN_GESTOR"; }''' Result=> Res
+    WAIT Pausa
+    WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} var b=G("ICTAB_2"); if(b){b.click(); return "OK";} return L("Administración") ? "OK" : "SIN_ADMIN"; }''' Result=> Res
+    WAIT Pausa
+    DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> MarcaTiempo
+    SET Res TO $'''SIN_ARCHIVO'''
+    LOOP Intento FROM 1 TO 20 STEP 1
+        WebAutomation.ExecuteJavascript BrowserInstance: Browser Javascript: $'''function ExecuteScript() { function D(w,a){a.push(w.document);for(var i=0;i<w.frames.length;i++){try{D(w.frames[i],a);}catch(e){}}return a;} function G(id){var a=D(window,[]);for(var i=0;i<a.length;i++){var e=a[i].getElementById(id);if(e)return e;}return null;} function B(v){var a=D(window,[]);if(v=="Actualizar"){for(var i=0;i<a.length;i++){var r=a[i].getElementById("REFRESH_BTN");if(r){r.click();return true;}}}for(var i=0;i<a.length;i++){var b=a[i].querySelectorAll("input[type=button],input[type=submit],button,a");for(var j=0;j<b.length;j++){var t=((b[j].value||"")+" "+(b[j].innerText||"")).trim();if(t==v||t.indexOf(v)==0){b[j].click();return true;}}}return false;} function L(v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("a");for(var j=0;j<l.length;j++){if((l[j].innerText||"").trim()==v){l[j].click();return true;}}}return false;} function F(lb,v){var a=D(window,[]);for(var i=0;i<a.length;i++){var l=a[i].getElementsByTagName("label");for(var j=0;j<l.length;j++){if((l[j].innerText||"").indexOf(lb)>=0&&l[j].htmlFor){var e=a[i].getElementById(l[j].htmlFor);if(e){e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}));return true;}}}}return false;} function T(s){var a=D(window,[]);for(var i=0;i<a.length;i++){if(((a[i].body&&a[i].body.innerText)||"").indexOf(s)>=0)return true;}return false;} var a=D(window,[]); for(var i=0;i<a.length;i++){var r=a[i].getElementsByTagName("tr"); for(var j=0;j<r.length;j++){var x=r[j].innerText||""; if(x.indexOf("%Instancia%")>=0 && x.length<400){var l=r[j].getElementsByTagName("a"); for(var k=0;k<l.length;k++){var t=(l[k].innerText||"").trim(); if(t && !/^Det/i.test(t)){l[k].click(); return "OK:"+t;}}}}} B("Actualizar"); return "SIN_ARCHIVO"; }''' Result=> Res
+        IF StartsWith(Res, $'''OK''', False) THEN
+            EXIT LOOP
+        END
+        WAIT EsperaMonitor
+    END
+    IF NotStartsWith(Res, $'''OK''', False) THEN
+        Variables.AddItemToList Item: $'''%Ciclo% (instancia %Instancia%: no apareció el informe en Administración)''' List: Fallidos
+        NEXT LOOP
+    END
+
+    SET Guardado TO False
+    LOOP Espera FROM 1 TO 90 STEP 1
+        WAIT 2
+        Folder.GetFiles Folder: Descargas FileFilter: $'''*%Instancia%*.csv''' IncludeSubfolders: False FailOnAccessDenied: True SortBy1: Folder.SortBy.CreationTime SortDescending1: True SortBy2: Folder.SortBy.NoSort SortDescending2: False SortBy3: Folder.SortBy.NoSort SortDescending3: False Files=> Archivos
+        IF Archivos.Count > 0 THEN
+            IF Archivos.Count > 0 THEN
+                WAIT 3
+                File.RenameFiles.Rename Files: Archivos[0] NewName: $'''CargosPagos_%Ciclo%''' KeepExtension: True IfFileExists: File.IfExists.Overwrite RenamedFiles=> Renombrados
+                File.Move Files: Renombrados Destination: Salida IfFileExists: File.IfExists.Overwrite MovedFiles=> Movidos
+                Variables.AddItemToList Item: Ciclo List: Descargados
+                SET Guardado TO True
+                EXIT LOOP
+            END
+        END
+    END
+    IF Guardado = False THEN
+        Variables.AddItemToList Item: $'''%Ciclo% (instancia %Instancia%: la descarga no apareció en Descargas)''' List: Fallidos
+    END
+END
+
+WebAutomation.CloseWebBrowser BrowserInstance: Browser
+Text.JoinText.JoinWithCustomDelimiter List: Descargados CustomDelimiter: $''', ''' Result=> TxtOK
+Text.JoinText.JoinWithCustomDelimiter List: Fallidos CustomDelimiter: $''' | ''' Result=> TxtFallos
+Display.ShowMessageDialog.ShowMessage Title: $'''Cargos vs Pagos - Resumen''' Message: $'''Descargados (%Descargados.Count%): %TxtOK% -- Con novedad (%Fallidos.Count%): %TxtFallos% -- Carpeta: %Salida%''' Icon: Display.Icon.Information Buttons: Display.Buttons.OK DefaultButton: Display.DefaultButton.Button1 IsTopMost: True ButtonPressed=> Boton
